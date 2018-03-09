@@ -12,6 +12,9 @@ class RmCommand extends BaseCommand
 {
     const RETURN_CODE_STORAGE_ERROR = 1;
 
+    const ARG_PROJECT = "project";
+    const ARG_FILE = "file";
+
     /** @var StorageInterface */
     protected $storage;
 
@@ -35,12 +38,12 @@ class RmCommand extends BaseCommand
             ->setName("rm")
             ->setDescription("Delete uploaded backup files.")
             ->addArgument(
-                "project",
+                self::ARG_PROJECT,
                 InputArgument::REQUIRED,
                 "Project identifier."
             )
             ->addArgument(
-                "file",
+                self::ARG_FILE,
                 InputArgument::REQUIRED,
                 "File to delete."
             );
@@ -55,8 +58,8 @@ class RmCommand extends BaseCommand
             return $parentExitCode;
         }
 
-        $project = $input->getArgument("project");
-        $file = $input->getArgument("file");
+        $project = $input->getArgument(self::ARG_PROJECT);
+        $file = $input->getArgument(self::ARG_FILE);
 
         try {
             $this->storage->delete($project, $file);

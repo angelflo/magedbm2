@@ -20,14 +20,6 @@ class Combined implements ConfigInterface
     
     const DEFAULT_CONFIG_FILE = "~/.magedbm2/config.yml";
 
-    const KEY_TABLE_GROUPS = 'table-groups';
-
-    const KEY_DB_HOST      = 'db-host';
-    const KEY_DB_NAME      = 'db-name';
-    const KEY_DB_USER      = 'db-user';
-    const KEY_DB_PASS      = 'db-pass';
-    const KEY_DB_PORT      = 'db-port';
-
     protected $data = [];
 
     protected $loaded = false;
@@ -113,7 +105,7 @@ class Combined implements ConfigInterface
      */
     public function getTmpDir()
     {
-        $dir = $this->get("tmp_dir");
+        $dir = $this->get(Option::TEMPORARY_DIR);
 
         if (!file_exists($dir)) {
             if (!mkdir($dir, 0777, true)) {
@@ -142,7 +134,7 @@ class Combined implements ConfigInterface
     public function getRootDir()
     {
         try {
-            return $this->input->getOption("root-dir");
+            return $this->input->getOption(Option::ROOT_DIR);
         } catch (InvalidArgumentException $e) {
             return null;
         }
@@ -174,11 +166,11 @@ class Combined implements ConfigInterface
                 );
 
                 $this->databaseCredentials = new DatabaseCredentials(
-                    $this->get(self::KEY_DB_NAME) ?? '',
-                    $this->get(self::KEY_DB_USER) ?? '',
-                    $this->get(self::KEY_DB_PASS) ?? '',
-                    $this->get(self::KEY_DB_HOST) ?? 'localhost',
-                    $this->get(self::KEY_DB_PORT) ?? '3306'
+                    $this->get(Option::DB_NAME) ?? '',
+                    $this->get(Option::DB_USER) ?? '',
+                    $this->get(Option::DB_PASS) ?? '',
+                    $this->get(Option::DB_HOST) ?? 'localhost',
+                    $this->get(Option::DB_PORT) ?? '3306'
                 );
             }
         }
@@ -192,7 +184,7 @@ class Combined implements ConfigInterface
      */
     public function getTableGroups(): array
     {
-        $tableGroupsConfig = $this->get(static::KEY_TABLE_GROUPS);
+        $tableGroupsConfig = $this->get(Option::TABLE_GROUPS);
         $tableGroups = [];
         
         if ($tableGroupsConfig) {
@@ -226,7 +218,7 @@ class Combined implements ConfigInterface
     public function getConfigFile()
     {
         try {
-            $configFile = $this->input->getOption('config');
+            $configFile = $this->input->getOption(Option::GLOBAL_CONFIG_FILE);
 
             if ($configFile) {
                 return $configFile;
@@ -359,16 +351,24 @@ class Combined implements ConfigInterface
 
         $definition
             ->addOption(new InputOption(
-                "config",
+                Option::GLOBAL_CONFIG_FILE,
                 null,
                 InputOption::VALUE_REQUIRED,
-                "Configuration file to use",
+                "Global configuration file to use",
                 $this->getDefaultConfigFile()
             ));
 
         $definition
             ->addOption(new InputOption(
-                self::KEY_DB_HOST,
+                Option::PROJECT_CONFIG_FILE,
+                null,
+                InputOption::VALUE_OPTIONAL,
+                "Project configuration file to use"
+            ));
+
+        $definition
+            ->addOption(new InputOption(
+                Option::DB_HOST,
                 null,
                 InputOption::VALUE_OPTIONAL,
                 'Database host'
@@ -376,7 +376,7 @@ class Combined implements ConfigInterface
 
         $definition
             ->addOption(new InputOption(
-                self::KEY_DB_PORT,
+                Option::DB_PORT,
                 null,
                 InputOption::VALUE_OPTIONAL,
                 'Database port'
@@ -384,7 +384,7 @@ class Combined implements ConfigInterface
 
         $definition
             ->addOption(new InputOption(
-                self::KEY_DB_USER,
+                Option::DB_USER,
                 null,
                 InputOption::VALUE_OPTIONAL,
                 'Database username'
@@ -392,7 +392,7 @@ class Combined implements ConfigInterface
 
         $definition
             ->addOption(new InputOption(
-                self::KEY_DB_PASS,
+                Option::DB_PASS,
                 null,
                 InputOption::VALUE_OPTIONAL,
                 'Database password'
@@ -400,7 +400,7 @@ class Combined implements ConfigInterface
 
         $definition
             ->addOption(new InputOption(
-                self::KEY_DB_NAME,
+                Option::DB_NAME,
                 null,
                 InputOption::VALUE_OPTIONAL,
                 'Database name'
@@ -408,7 +408,7 @@ class Combined implements ConfigInterface
 
 
         $definition->addOption(new InputOption(
-            "root-dir",
+            Option::ROOT_DIR,
             null,
             InputOption::VALUE_REQUIRED,
             "Magento 2 root directory"

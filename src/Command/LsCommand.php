@@ -13,6 +13,8 @@ class LsCommand extends BaseCommand
 {
     const RETURN_CODE_STORAGE_ERROR = 1;
 
+    const ARG_PROJECT = "project";
+
     /** @var StorageInterface */
     protected $storage;
 
@@ -36,7 +38,7 @@ class LsCommand extends BaseCommand
             ->setName("ls")
             ->setDescription("List available projects or backup files.")
             ->addArgument(
-                "project",
+                self::ARG_PROJECT,
                 InputArgument::OPTIONAL,
                 "Project identifier."
             );
@@ -51,7 +53,7 @@ class LsCommand extends BaseCommand
             return $parentExitCode;
         }
 
-        $project = $input->getArgument("project");
+        $project = $input->getArgument(self::ARG_PROJECT);
 
         if (!$project) {
             try {
