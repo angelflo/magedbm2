@@ -77,3 +77,41 @@ table-groups:
   - id: idx
     description: Tables with _idx suffix
     tables: "*_idx"
+
+anonymizer:
+  tables:
+    - name: sales_order
+      columns:
+        customer_dob: Meanbee\Magedbm2\Anonymizer\Formatter\DateTime
+        customer_email: Faker\Provider\Internet::email
+        customer_prefix: Faker\Provider\en_US\Person::title
+        customer_firstname: Meanbee\Magedbm2\Anonymizer\Formatter\Person
+        customer_middlename: Faker\Provider\en_US\Person::lastName
+        customer_lastname: Faker\Provider\en_US\Person::lastName
+        customer_suffix: Faker\Provider\en_US\Person::suffix
+        remote_ip: Faker\Provider\Internet::ipv4
+        x_forwarded_for: Faker\Provider\Internet::ipv4
+
+    - name: sales_order_address
+      columns:
+        region: Faker\Provider\en_US\Address::state
+        postcode: Faker\Provider\en_US\Address::postcode
+        lastname: Faker\Provider\en_US\Person::lastName
+        street: Faker\Provider\en_US\Address::streetAddress
+        city: Faker\Provider\en_US\Address::city
+        email: Faker\Provider\Internet::email
+        telephone: Faker\Provider\en_US\PhoneNumber::phoneNumber
+        firstname: Faker\Provider\en_US\Person::firstName
+        prefix: Faker\Provider\en_US\Person::title
+        middlename: Faker\Provider\en_US\Person::lastName
+        suffix: Faker\Provider\en_US\Person::suffix
+        company: Faker\Provider\en_US\Company::company
+
+  eav:
+    - entity: customer
+      attributes:
+        firstname: Faker\Provider\en_US\Person::firstName
+
+    - entity: customer_address
+      attributes:
+        firstname: Faker\Provider\en_US\Person::firstName

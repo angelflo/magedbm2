@@ -31,7 +31,8 @@
     "aws/aws-sdk-php": "^3.52",
     "meanbee/libmageconf": "^1.0",
     "symfony/process": "^3.4",
-    "psr/log": "^1.0"
+    "psr/log": "^1.0",
+    "fzaninotto/faker": "^1.7"
   },
   "require-dev": {
     "phing/phing": "^2.15.2",

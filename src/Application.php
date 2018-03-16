@@ -223,5 +223,9 @@ class Application extends \Symfony\Component\Console\Application
         $this->add(new Command\RmCommand(
             $this->getService("storage")
         ));
+
+        $this->add(new Command\ExportCommand(
+            $this->getConfig()
+        ));
     }
 }
