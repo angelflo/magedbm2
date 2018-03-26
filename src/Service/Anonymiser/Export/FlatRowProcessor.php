@@ -1,6 +1,9 @@
 <?php
 
-namespace Meanbee\Magedbm2\Service\Anonymiser;
+namespace Meanbee\Magedbm2\Service\Anonymiser\Export;
+
+use Meanbee\Magedbm2\Service\Anonymiser\Export\Row;
+use Meanbee\Magedbm2\Service\Anonymiser\Export\RowProcessor;
 
 class FlatRowProcessor extends RowProcessor
 {

@@ -1,8 +1,8 @@
 <?php
 
-namespace Meanbee\Magedbm2\Tests\Service\Anonymiser;
+namespace Meanbee\Magedbm2\Tests\Service\Anonymiser\Export;
 
-use Meanbee\Magedbm2\Service\Anonymiser\Row;
+use Meanbee\Magedbm2\Service\Anonymiser\Export\Row;
 use PHPUnit\Framework\TestCase;
 
 class RowTest extends TestCase

@@ -1,16 +1,16 @@
 <?php
 
-namespace Meanbee\Magedbm2\Tests\Service;
+namespace Meanbee\Magedbm2\Tests\Service\Anonymiser;
 
-use Meanbee\Magedbm2\Service\Anonymiser\Anonymiser;
+use Meanbee\Magedbm2\Service\Anonymiser\Export;
 use PHPUnit\Framework\TestCase;
 use VirtualFileSystem\FileSystem as VirtualFileSystem;
 
-class AnonymiserTest extends TestCase
+class ExportTest extends TestCase
 {
     const NOOP = 'Meanbee\Magedbm2\Anonymizer\Formatter\Noop';
 
-    /** @var Anonymiser */
+    /** @var Export */
     private $subject;
 
     /** @var VirtualFileSystem */
@@ -21,7 +21,7 @@ class AnonymiserTest extends TestCase
 
     public function setUp()
     {
-        $this->subject = new Anonymiser();
+        $this->subject = new Export();
 
         $this->vfs = new VirtualFileSystem();
 
@@ -148,7 +148,7 @@ class AnonymiserTest extends TestCase
      */
     private function getDataFilePath($name)
     {
-        $filePath = implode(DIRECTORY_SEPARATOR, [__DIR__, 'Anonymiser', '_data', $name]);
+        $filePath = implode(DIRECTORY_SEPARATOR, [__DIR__, '_data', $name]);
 
         if (!file_exists($filePath)) {
             $this->fail(sprintf('Unable to load data file %s, file doesn\'t exist at %s', $name, $filePath));

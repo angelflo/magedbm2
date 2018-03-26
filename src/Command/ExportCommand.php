@@ -3,7 +3,7 @@
 namespace Meanbee\Magedbm2\Command;
 
 use Meanbee\Magedbm2\Application\ConfigInterface;
-use Meanbee\Magedbm2\Service\Anonymiser\Anonymiser;
+use Meanbee\Magedbm2\Service\Anonymiser\Export;
 use Meanbee\Magedbm2\Shell\Command\Gzip;
 use Meanbee\Magedbm2\Shell\Command\Mysqldump;
 use Symfony\Component\Console\Input\InputArgument;
@@ -23,7 +23,7 @@ class ExportCommand extends BaseCommand
     private $config;
 
     /**
-     * @var Anonymiser
+     * @var Export
      */
     private $anonymiser;
 
@@ -35,7 +35,7 @@ class ExportCommand extends BaseCommand
     {
         parent::__construct(self::NAME);
         $this->config = $config;
-        $this->anonymiser = new Anonymiser();
+        $this->anonymiser = new Export();
     }
 
     /**

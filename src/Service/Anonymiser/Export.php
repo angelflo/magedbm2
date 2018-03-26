@@ -2,12 +2,15 @@
 
 namespace Meanbee\Magedbm2\Service\Anonymiser;
 
+use Meanbee\Magedbm2\Service\Anonymiser\Export\FlatRowProcessor;
+use Meanbee\Magedbm2\Service\Anonymiser\Export\EavRowProcessor;
+use Meanbee\Magedbm2\Service\Anonymiser\Export\Row;
 use Psr\Log\LoggerAwareInterface;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use XMLReader;
 
-class Anonymiser implements LoggerAwareInterface
+class Export implements LoggerAwareInterface
 {
     /** @var LoggerInterface */
     private $logger;

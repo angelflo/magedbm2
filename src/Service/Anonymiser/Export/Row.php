@@ -1,6 +1,6 @@
 <?php
 
-namespace Meanbee\Magedbm2\Service\Anonymiser;
+namespace Meanbee\Magedbm2\Service\Anonymiser\Export;
 
 class Row
 {
