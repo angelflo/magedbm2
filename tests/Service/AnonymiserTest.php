@@ -8,6 +8,8 @@ use VirtualFileSystem\FileSystem as VirtualFileSystem;
 
 class AnonymiserTest extends TestCase
 {
+    const NOOP = 'Meanbee\Magedbm2\Anonymizer\Formatter\Noop';
+
     /** @var Anonymiser */
     private $subject;
 
@@ -20,10 +22,17 @@ class AnonymiserTest extends TestCase
     public function setUp()
     {
         $this->subject = new Anonymiser();
+
         $this->vfs = new VirtualFileSystem();
 
         $this->inputFile = $this->getDataFilePath('test.xml');
         $this->outputFile = $this->vfs->path('/output.xml');
+
+        $this->subject->addColumnRule('sales_order', 'customer_firstname', self::NOOP);
+        $this->subject->addColumnRule('sales_order_address', 'firstname', self::NOOP);
+
+        $this->subject->addAttributeRule('customer', 'firstname', self::NOOP);
+        $this->subject->addAttributeRule('customer_address', 'firstname', self::NOOP);
 
         @unlink($this->outputFile);
     }
@@ -63,10 +72,11 @@ class AnonymiserTest extends TestCase
         ];
 
         foreach ($tablesToCheck as $table) {
-            $rowCountPath = sprintf("//table_data[@name='%s']/row", $table);
+            $inputRowCountPath = sprintf("//table_data[@name='%s']/row", $table);
+            $outputRowCountPath = sprintf("//table[@name='%s']/row", $table);
 
-            $inputRowCount  = count($inputXml->xpath($rowCountPath));
-            $outputRowCount = count($outputXml->xpath($rowCountPath));
+            $inputRowCount  = count($inputXml->xpath($inputRowCountPath));
+            $outputRowCount = count($outputXml->xpath($outputRowCountPath));
 
             $this->assertEquals(
                 $inputRowCount,
@@ -89,20 +99,45 @@ class AnonymiserTest extends TestCase
         $inputXml = new \SimpleXMLElement(file_get_contents($this->inputFile));
         $outputXml = new \SimpleXMLElement(file_get_contents($this->outputFile));
 
-        $orderIdPath = "//table_data[@name='sales_order']/row[1]/field[@name='increment_id']/text()";
-        $emailPath = "//table_data[@name='sales_order']/row[1]/field[@name='customer_email']/text()";
+        $inputOrderIdPath = "//table_data[@name='sales_order']/row[1]/field[@name='increment_id']/text()";
+        $inputEmailPath = "//table_data[@name='sales_order']/row[1]/field[@name='customer_email']/text()";
 
-        $inputOrderId = (string) $inputXml->xpath($orderIdPath)[0];
-        $inputEmail = (string) $inputXml->xpath($emailPath)[0];
+        $outputOrderIdPath = "//table[@name='sales_order']/row[1]/column[@name='increment_id']/text()";
+        $outputEmailPath = "//table[@name='sales_order']/row[1]/column[@name='customer_email']/text()";
 
-        $outputOrderId = (string) $outputXml->xpath($orderIdPath)[0];
-        $outputEmail = (string) $outputXml->xpath($emailPath)[0];
+        $inputOrderId = (string) $inputXml->xpath($inputOrderIdPath)[0];
+        $inputEmail = (string) $inputXml->xpath($inputEmailPath)[0];
+
+        $outputOrderId = (string) $outputXml->xpath($outputOrderIdPath)[0];
+        $outputEmail = (string) $outputXml->xpath($outputEmailPath)[0];
 
         $this->assertEquals('200000001', $inputOrderId);
         $this->assertEquals($inputOrderId, $outputOrderId);
 
         $this->assertEquals('order_1@example.com', $inputEmail);
         $this->assertEquals('beqre_1@rknzcyr.pbz', $outputEmail);
+    }
+
+    public function testAddsFlatTable()
+    {
+        $newTables = $this->subject->addColumnRule('mytable', 'test', 'test');
+
+        $this->assertCount(1, $newTables);
+        $this->assertEquals('mytable', $newTables[0]);
+    }
+
+    public function testAddsEavTables()
+    {
+        $newTables = $this->subject->addAttributeRule('customer', 'test', 'test');
+
+        $this->assertCount(6, $newTables);
+
+        $this->assertContains('customer_entity', $newTables);
+        $this->assertContains('customer_entity_datetime', $newTables);
+        $this->assertContains('customer_entity_decimal', $newTables);
+        $this->assertContains('customer_entity_int', $newTables);
+        $this->assertContains('customer_entity_text', $newTables);
+        $this->assertContains('customer_entity_varchar', $newTables);
     }
 
     /**
@@ -113,7 +148,7 @@ class AnonymiserTest extends TestCase
      */
     private function getDataFilePath($name)
     {
-        $filePath = implode(DIRECTORY_SEPARATOR, [__DIR__, 'AnonymiserTest', '_data', $name]);
+        $filePath = implode(DIRECTORY_SEPARATOR, [__DIR__, 'Anonymiser', '_data', $name]);
 
         if (!file_exists($filePath)) {
             $this->fail(sprintf('Unable to load data file %s, file doesn\'t exist at %s', $name, $filePath));

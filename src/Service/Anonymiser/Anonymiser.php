@@ -2,7 +2,6 @@
 
 namespace Meanbee\Magedbm2\Service\Anonymiser;
 
-use Meanbee\Magedbm2\Anonymizer\FormatterInterface;
 use Psr\Log\LoggerAwareInterface;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
@@ -13,46 +12,74 @@ class Anonymiser implements LoggerAwareInterface
     /** @var LoggerInterface */
     private $logger;
 
-    private $tableConfig = [];
-    private $eavConfig = [];
-    private $formatterCache = [];
-    private $faker;
+    private $flatTables = [];
+    private $eavTables = [];
+
+    /** @var resource */
+    private $write;
+
+    /**
+     * @var FlatRowProcessor
+     */
+    private $flatRowProcessor;
+
+    /**
+     * @var EavRowProcessor
+     */
+    private $eavRowProcessor;
 
     public function __construct()
     {
         $this->logger = new NullLogger();
-        $this->faker = \Faker\Factory::create();
+        $this->flatRowProcessor = new FlatRowProcessor();
+        $this->eavRowProcessor = new EavRowProcessor();
     }
 
     /**
+     * Adds a formatter rule to be used against flat tables.
+     *
      * @param $table
      * @param $column
      * @param $formatter
+     * @return array
      */
     public function addColumnRule($table, $column, $formatter)
     {
-        if (!array_key_exists($table, $this->tableConfig)) {
-            $this->tableConfig[$table] = [];
-        }
+        $this->flatTables[] = $table;
+        $this->flatRowProcessor->addRule($table, $column, $formatter);
 
-        $this->tableConfig[$table][$column] = $formatter;
+        return [$table];
     }
 
     /**
+     * Adds a formatter rule to be used against EAV tables.
+     *
      * @param $eavEntity
      * @param $attributeCode
      * @param $formatter
+     * @return array
      */
     public function addAttributeRule($eavEntity, $attributeCode, $formatter)
     {
-        if (!array_key_exists($eavEntity, $this->eavConfig)) {
-            $this->eavConfig[$eavEntity] = [];
+        $this->eavRowProcessor->addRule($eavEntity, $attributeCode, $formatter);
+
+        $entityTable = sprintf('%s_entity', $eavEntity);
+        $tables = [$entityTable];
+
+        $this->eavTables[] = sprintf('%s_entity', $eavEntity);
+
+        foreach (Eav::VALUE_TYPES as $type) {
+            $table = sprintf('%s_entity_%s', $eavEntity, $type);
+            $tables[] = $table;
+            $this->eavTables[] = $table;
         }
 
-        $this->eavConfig[$eavEntity][$attributeCode] = $formatter;
+        return $tables;
     }
 
     /**
+     * Anonymised the input file and output the results to a new file.
+     *
      * @param $inputFile
      * @param $outputFile
      */
@@ -61,11 +88,10 @@ class Anonymiser implements LoggerAwareInterface
         $xml = new XMLReader();
         $xml->open($inputFile);
 
-        $write = fopen($outputFile, 'wb');
+        $this->write = fopen($outputFile, 'wb');
 
-        fwrite($write, '<?xml version="1.0"?>' . "\n");
-        fwrite($write, '<mysqldump xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">' . "\n");
-        fwrite($write, '<database name="TODO">' . "\n");
+        fwrite($this->write, '<?xml version="1.0"?>' . "\n");
+        $this->openTag('magedbm2-export', ['version' => '1.0.0']);
 
         $tableName = null;
 
@@ -92,44 +118,64 @@ class Anonymiser implements LoggerAwareInterface
                     continue;
                 }
 
+                if (!$this->isFlatTable($tableName) && !$this->isEavTable($tableName)) {
+                    $this->getLogger()->info("Skipping $tableName as we're not configured to read it");
+                    continue;
+                }
+
                 if ($openTableTag) {
-                    fwrite($write, '</table_data>' . "\n");
+                    $this->closeTag('table', 1);
                 }
 
                 $openTableTag = true;
 
                 $this->getLogger()->info("Processing $tableName");
 
-                fwrite($write, '<table_data name="' . $tableName . '">');
+                $this->openTag('table', ['name' => $tableName], 1);
             }
 
             if ($tableName && $xml->nodeType === XMLReader::ELEMENT && $xml->name === 'row') {
                 $rowData = new \SimpleXMLElement($xml->readOuterXml());
+                $row = new Row($rowData);
+                $row->table = $tableName;
+
                 $xml->next();
 
-                if (array_key_exists($tableName, $this->tableConfig)) {
-                    $this->processRow($tableName, $rowData);
+                if ($this->isFlatTable($tableName)) {
+                    $this->processFlatRow($row);
+                } elseif ($this->isEavTable($tableName)) {
+                    $this->processEavTable($row);
                 }
 
-                $rowDataXml = $rowData->asXML();
-                $rowDataXml = str_replace(array(
-                    '<?xml version="1.0"?>',
-                    ' xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"'
-                ), '', $rowDataXml);
-
-                fwrite($write, $rowDataXml);
                 continue;
             }
         }
 
         if ($openTableTag) {
-            fwrite($write, '</table_data>' . "\n");
-            $openTableTag = false;
+            $this->closeTag('table', 1);
         }
 
-        fwrite($write, '</database>' . "\n");
-        fwrite($write, '</mysqldump>' . "\n");
-        fclose($write);
+        $this->closeTag('magedbm2-export');
+
+        fclose($this->write);
+    }
+
+    /**
+     * @param $table
+     * @return bool
+     */
+    private function isFlatTable($table)
+    {
+        return in_array($table, $this->flatTables, true);
+    }
+
+    /**
+     * @param $table
+     * @return bool
+     */
+    private function isEavTable($table)
+    {
+        return in_array($table, $this->eavTables, true);
     }
 
     /**
@@ -140,71 +186,84 @@ class Anonymiser implements LoggerAwareInterface
         return $this->logger;
     }
 
-    private function extractEntityTypes($param)
+    /**
+     * @param \SimpleXMLElement $param
+     */
+    private function extractEntityTypes(\SimpleXMLElement $param)
     {
-    }
+        foreach ($param->row as $row) {
+            $entityCode = null;
+            $entityId = null;
 
-    private function extractAttributes($param)
-    {
-    }
+            foreach ($row->field as $field) {
+                switch ($field['name']) {
+                    case 'entity_type_id':
+                        $entityId = (string)$field;
+                        break;
+                    case 'entity_type_code':
+                        $entityCode = (string)$field;
+                        break;
+                }
 
-    private function processRow($tableName, $rowData)
-    {
-        $tableConfig = $this->tableConfig[$tableName];
-
-        foreach ($rowData->field as $field) {
-            $name = (string)$field['name'];
-            $value = (string)$field;
-
-            if ($value === '') {
-                continue;
-            }
-
-            if (array_key_exists($name, $tableConfig)) {
-                $formatterSpec = $tableConfig[$name];
-                $newValue = $this->runFormatter($value, $formatterSpec);
-
-                $field[0][0] = $newValue;
+                if ($entityCode !== null && $entityId !== null) {
+                    $this->eavRowProcessor->defineEntity($entityCode, $entityId);
+                    break;
+                }
             }
         }
     }
 
-    private function runFormatter($value, $formatterSpec)
+    /**
+     * @param \SimpleXMLElement $param
+     */
+    private function extractAttributes(\SimpleXMLElement $param)
     {
-        if (!array_key_exists($formatterSpec, $this->formatterCache)) {
-            $class = null;
-            $method = null;
+        foreach ($param->row as $row) {
+            $id = null;
+            $code = null;
+            $type_id = null;
 
-            if (strpos($formatterSpec, '::')) {
-                list($class, $method) = explode('::', $formatterSpec);
-            } else {
-                $class = $formatterSpec;
-            }
+            foreach ($row->field as $field) {
+                switch ($field['name']) {
+                    case 'attribute_id':
+                        $id = (string)$field;
+                        break;
+                    case 'entity_type_id':
+                        $type_id = (string)$field;
+                        break;
+                    case 'attribute_code':
+                        $code = (string)$field;
+                        break;
+                }
 
-            if (!class_exists($class)) {
-                throw new \RuntimeException(sprintf("Formatter class %s does not exist", $class));
-            }
-
-            if (in_array('Faker\Provider\Base', class_parents($class), true)) {
-                $instance = new $class($this->faker);
-            } else {
-                $instance = new $class;
-            }
-
-            if ($method) {
-                $this->formatterCache[$formatterSpec] = function ($value) use ($instance, $method) {
-                    return $instance->$method();
-                };
-            } elseif ($instance instanceof FormatterInterface) {
-                $this->formatterCache[$formatterSpec] = function ($value) use ($instance) {
-                    return $instance->format($value, []);
-                };
-            } else {
-                throw new \RuntimeException("Unable to process formatter spec: $formatterSpec");
+                if ($id !== null && $code !== null && $type_id !== null) {
+                    $this->eavRowProcessor->defineAttribute($code, $id, $type_id);
+                    break;
+                }
             }
         }
+    }
 
-        return $this->formatterCache[$formatterSpec]($value);
+    /**
+     * @param Row $row
+     */
+    private function processFlatRow(Row $row)
+    {
+        fwrite(
+            $this->write,
+            $this->flatRowProcessor->process($row)
+        );
+    }
+
+    /**
+     * @param Row $row
+     */
+    private function processEavTable(Row $row)
+    {
+        fwrite(
+            $this->write,
+            $this->eavRowProcessor->process($row)
+        );
     }
 
     /**
@@ -217,5 +276,44 @@ class Anonymiser implements LoggerAwareInterface
     public function setLogger(LoggerInterface $logger)
     {
         $this->logger = $logger;
+    }
+
+    /**
+     * @param $name
+     * @param array $attributes
+     * @param int $depth
+     * @param bool $newline
+     */
+    private function openTag($name, $attributes = [], $depth = 0, $newline = true)
+    {
+        $attributeString = '';
+
+        foreach ($attributes as $key => $value) {
+            $attributeString .= sprintf(' %s="%s"', $key, $value);
+        }
+
+        if ($depth > 0) {
+            fwrite($this->write, str_repeat("\t", $depth));
+        }
+
+        fwrite($this->write, '<' . $name . $attributeString . '>');
+
+        if ($newline) {
+            fwrite($this->write, "\n");
+        }
+    }
+
+    /**
+     * @param $name
+     * @param int $depth
+     */
+    private function closeTag($name, $depth = 0)
+    {
+        if ($depth > 0) {
+            fwrite($this->write, str_repeat("\t", $depth));
+        }
+
+        fwrite($this->write, '</' . $name . '>');
+        fwrite($this->write, "\n");
     }
 }

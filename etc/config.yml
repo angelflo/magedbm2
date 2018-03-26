@@ -85,7 +85,7 @@ anonymizer:
         customer_dob: Meanbee\Magedbm2\Anonymizer\Formatter\DateTime
         customer_email: Faker\Provider\Internet::email
         customer_prefix: Faker\Provider\en_US\Person::title
-        customer_firstname: Meanbee\Magedbm2\Anonymizer\Formatter\Person
+        customer_firstname: Meanbee\Magedbm2\Anonymizer\Formatter\Person\FirstName
         customer_middlename: Faker\Provider\en_US\Person::lastName
         customer_lastname: Faker\Provider\en_US\Person::lastName
         customer_suffix: Faker\Provider\en_US\Person::suffix
