@@ -116,7 +116,7 @@ class LsCommand extends BaseCommand
             }
 
             $output->writeln(array_merge([
-                "Projects",
+                "Available projects",
                 "========================================",
             ], $projects));
 
@@ -136,7 +136,7 @@ class LsCommand extends BaseCommand
         }
 
         $output->writeln([
-            sprintf("Files for '%s'", $project),
+            sprintf("Available files for '%s'", $project),
             "========================================",
         ]);
 

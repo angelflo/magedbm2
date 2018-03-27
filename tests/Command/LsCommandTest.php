@@ -20,13 +20,28 @@ class LsCommandTest extends TestCase
         $projects = ["test-project-1", "test-project-2"];
 
         $storage = $this->createMock(StorageInterface::class);
+        $storage->setPurpose(StorageInterface::PURPOSE_STRIPPED_DATABASE);
+
+        $dataStorage = $this->createMock(StorageInterface::class);
+        $dataStorage->setPurpose(StorageInterface::PURPOSE_ANONYMISED_DATA);
 
         $storage
             ->expects($this->once())
             ->method("listProjects")
             ->willReturn($projects);
 
-        $tester = $this->getCommandTester($storage);
+        $storage->method('validateConfiguration')
+            ->willReturn(true);
+
+        $dataStorage
+            ->expects($this->once())
+            ->method("listProjects")
+            ->willReturn($projects);
+
+        $dataStorage->method('validateConfiguration')
+            ->willReturn(true);
+
+        $tester = $this->getCommandTester($storage, $dataStorage);
         $tester->execute([]);
 
         $output = $tester->getDisplay();
@@ -58,13 +73,28 @@ class LsCommandTest extends TestCase
         }, $files);
 
         $storage = $this->createMock(StorageInterface::class);
+        $storage->setPurpose(StorageInterface::PURPOSE_STRIPPED_DATABASE);
+
+        $dataStorage = $this->createMock(StorageInterface::class);
+        $dataStorage->setPurpose(StorageInterface::PURPOSE_ANONYMISED_DATA);
 
         $storage
             ->expects($this->once())
             ->method("listFiles")
             ->willReturn($files);
 
-        $tester = $this->getCommandTester($storage);
+        $storage->method('validateConfiguration')
+            ->willReturn(true);
+
+        $dataStorage
+            ->expects($this->once())
+            ->method("listFiles")
+            ->willReturn($files);
+
+        $dataStorage->method('validateConfiguration')
+            ->willReturn(true);
+
+        $tester = $this->getCommandTester($storage, $dataStorage);
         $tester->execute([
             "project" => "test",
         ]);
@@ -72,6 +102,7 @@ class LsCommandTest extends TestCase
         $output = $tester->getDisplay();
 
         $this->assertContains("Available files", $output);
+
         foreach ($files as $file) {
             $this->assertContains($file->name, $output);
         }
@@ -81,15 +112,14 @@ class LsCommandTest extends TestCase
      * Create and configure a tester for the "ls" command.
      *
      * @param StorageInterface $storage
+     * @param StorageInterface $dataStorage
      *
      * @return CommandTester
      */
-    protected function getCommandTester($storage)
+    protected function getCommandTester($storage, $dataStorage)
     {
-        $command = new LsCommand($storage);
+        $command = new LsCommand($storage, $dataStorage);
 
-        $tester = new CommandTester($command);
-
-        return $tester;
+        return new CommandTester($command);
     }
 }
