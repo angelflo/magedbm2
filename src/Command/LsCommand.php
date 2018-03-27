@@ -17,14 +17,20 @@ class LsCommand extends BaseCommand
 
     /** @var StorageInterface */
     protected $storage;
+    /**
+     * @var StorageInterface
+     */
+    private $dataStorage;
 
-    public function __construct(StorageInterface $storage)
+    public function __construct(StorageInterface $storage, StorageInterface $dataStorage)
     {
         parent::__construct();
 
         $this->storage = $storage;
+        $this->storage->setPurpose(StorageInterface::PURPOSE_STRIPPED_DATABASE);
 
-        $this->ensureServiceConfigurationValidated('storage', $this->storage);
+        $this->dataStorage = $dataStorage;
+        $this->dataStorage->setPurpose(StorageInterface::PURPOSE_ANONYMISED_DATA);
     }
 
     /**
@@ -53,51 +59,17 @@ class LsCommand extends BaseCommand
             return $parentExitCode;
         }
 
-        $project = $input->getArgument(self::ARG_PROJECT);
-
-        if (!$project) {
-            try {
-                $projects = $this->storage->listProjects();
-            } catch (ServiceException $e) {
-                $output->writeln(sprintf(
-                    "<error>Failed to retrieve available projects: %s</error>",
-                    $e->getMessage()
-                ));
-
-                return static::RETURN_CODE_STORAGE_ERROR;
-            }
-
-            $output->writeln(array_merge([
-                "Available projects",
-                "========================================",
-            ], $projects));
-
-            return static::RETURN_CODE_NO_ERROR;
+        if ($this->storage->validateConfiguration()) {
+            $this->output->writeln("Storage: Stripped Databases");
+            $this->output->writeln("========================================");
+            $this->renderStorage($this->storage, $input, $output);
+            $this->output->writeln('');
         }
 
-        try {
-            $files = $this->storage->listFiles($project);
-        } catch (ServiceException $e) {
-            $output->writeln(sprintf(
-                "<error>Failed to retrieve available files for %s: %s</error>",
-                $project,
-                $e->getMessage()
-            ));
-
-            return static::RETURN_CODE_STORAGE_ERROR;
-        }
-
-        $output->writeln([
-            sprintf("Available files for '%s'", $project),
-            "========================================",
-        ]);
-
-        foreach ($files as $file) {
-            $output->writeln($this->renderFile($file));
-        }
-
-        if (empty($files)) {
-            $output->writeln("[No files available]");
+        if ($this->dataStorage->validateConfiguration()) {
+            $this->output->writeln("Storage: Data Exports");
+            $this->output->writeln("========================================");
+            $this->renderStorage($this->dataStorage, $input, $output);
         }
 
         return static::RETURN_CODE_NO_ERROR;
@@ -120,5 +92,62 @@ class LsCommand extends BaseCommand
         $line = str_pad($file->name, $line_length - strlen($formatted_size)) . $formatted_size;
 
         return $line;
+    }
+
+    /**
+     * @param InputInterface $input
+     * @param OutputInterface $output
+     * @return int
+     */
+    protected function renderStorage(StorageInterface $storage, InputInterface $input, OutputInterface $output): int
+    {
+        $project = $input->getArgument(self::ARG_PROJECT);
+
+        if (!$project) {
+            try {
+                $projects = $storage->listProjects();
+            } catch (ServiceException $e) {
+                $output->writeln(sprintf(
+                    "<error>Failed to retrieve available projects: %s</error>",
+                    $e->getMessage()
+                ));
+
+                return static::RETURN_CODE_STORAGE_ERROR;
+            }
+
+            $output->writeln(array_merge([
+                "Projects",
+                "========================================",
+            ], $projects));
+
+            return static::RETURN_CODE_NO_ERROR;
+        }
+
+        try {
+            $files = $storage->listFiles($project);
+        } catch (ServiceException $e) {
+            $output->writeln(sprintf(
+                "<error>Failed to retrieve available files for %s: %s</error>",
+                $project,
+                $e->getMessage()
+            ));
+
+            return static::RETURN_CODE_STORAGE_ERROR;
+        }
+
+        $output->writeln([
+            sprintf("Files for '%s'", $project),
+            "========================================",
+        ]);
+
+        foreach ($files as $file) {
+            $output->writeln($this->renderFile($file));
+        }
+
+        if (empty($files)) {
+            $output->writeln("[No files available]");
+        }
+
+        return static::RETURN_CODE_NO_ERROR;
     }
 }
