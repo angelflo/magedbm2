@@ -10,6 +10,7 @@ It was written with developers in mind and provides commands for:
 
 * Creating sanitised (or unsanitised) Magento 2 production database backups and uploading them to Amazon S3
 * Downloading and importing existing backups to development or staging environments
+* Exporting and importing anonymised sensitive data tables
 
 ## Compatibility
 
@@ -25,24 +26,67 @@ Run the following commands to install the latest version of `magedbm2` globally:
 
 ## Configuration
 
-magedbm2 uses [Amazon S3](https://aws.amazon.com/s3/) to store database backups. To use it you will need to create a bucket on S3 and a user read and write access to that bucket. Note down your:
+magedbm2 uses [Amazon S3](https://aws.amazon.com/s3/) to store generated files. To use it you will need to create two buckets on S3 (one for database backups and another for data exports) and a user that has read and write access to the buckets. Note down your:
 
 - AWS Access Key ID
 - AWS Secret Access Key
 - S3 region where your bucket is hosted
-- The bucket name
+- The bucket names
 
-These details will need to be specified with option flags to most magedbm2 commands.
+These details will need to be specified with option flags to most `magedbm2` commands.
 
 ### Remembering credentials
 
 While the ability to specify the credentials as command line options is useful in automated scenarios, for personal everyday usage magedbm2 can be configured to remember your credentials by running:
 
-    magedbm2 configure [--access-key="..."] [--secret-key="..."] [--region="..."] [--bucket="..."] [-n]
+    magedbm2 configure [--access-key="..."] [--secret-key="..."] [--region="..."] [--bucket="..."] [--data-bucket="..."][-n]
 
-By default, the configure command will interactively prompt you for each of the configuration details. Alternatively, you can run it in a non-interactive mode with the `-n` option and specify the credentials you want to save by using the `--access-key`, `--secret-key`, `--region` or `--bucket` options.
+By default, the configure command will interactively prompt you for each of the configuration details. Alternatively, you can run it in a non-interactive mode with the `-n` option and specify the credentials you want to save by using the `--access-key`, `--secret-key`, `--region`, `--bucket` or `--data-bucket` options.
 
 The configuration is saved in a [YAML](http://www.yaml.org/) file, usually located in `~/.magedbm2/config.yml`.
+
+### Using without a Magento Installation
+
+It's not always possible to run `magedbm2` on the same server that a Magento installation is present, for example you might want to run a cron for `magedbm2` on your database server so that you don't clog the pipe to the application server with unnecessary backup traffic.
+
+`magedbm2` normally discovers the database credentials by looking for the `app/etc/env.php` configuration file in a Magento project. If this is not found then `magedbm2` will fallback to the following options:
+
+* `--db-host`
+* `--db-port`
+* `--db-user`
+* `--db-pass`
+
+### Defining strip table rules
+
+Often in your projects you'll have a list of tables that you want to strip as a group. You may be familiar with this concept in [magerun](https://github.com/netz98/n98-magerun) when passing `--strip=@development` to the `db:dump` command. Magedbm ships with a default set of strip table groups but you can add your by adding a new key under `table-groups` in your configuration, e.g.
+
+    table-groups:
+      - id: superpay
+        description: Sensitive Super Pay tables
+        tables: superpay_* super_logs superpay
+
+You can then use that table group in your `put` command, `magedbm2 put --strip=@superpay myproject`.
+
+### Defining anonymisation rules
+
+As well as stripping certain tables in your projects, you might also have project-specific columns containing sensitive data that you do not want exported. To do this you need to define which formatter to apply to the column.
+
+Depending on the type of entity that you want to anonymise you'll either need to use the `tables` or the `eav` key in the configuration.  Assuming that we've added a new table called `super_pay` with two columns that need anonymisation and we've added a new attribute to customers.
+
+    anonymizer:
+      tables:
+        - name: super_pay
+          columns:
+            customer_card_number: Faker\Provider\Payment::creditCardNumber
+            receipt_email: Faker\Provider\Internet::email
+      eav:
+        - entity: customer
+          attributes:
+            super_pay_tracking_id: Meanbee\Magedbm2\Anonymizer\Formatter\Rot13 # lol.
+
+You have access to the [Faker](https://github.com/fzaninotto/Faker) library.
+
+The format of the formatter string is either `${className}` if the class implements `Meanbee\Magedbm2\Anonymizer\FormatterInterface` or `${className}::${method}` if you want to call a method directly.
 
 ## Usage
 
@@ -78,16 +122,13 @@ To download the backup file without importing it, use the `--download-only` opti
 
 The rm command allows you to delete specific backup files from S3.
 
-### Running without a Magento installation
+### Exporting sensitive data
 
-It's not always possible to run `magedbm2` on the same server that a Magento installation is present, for example you might want to run a cron for `magedbm2` on your database server so that you don't clog the pipe to the application server with unnecessary backup traffic.
+    magedbm2 export <project>
 
-`magedbm2` normally discovers the database credentials by looking for the `app/etc/env.php` configuration file in a Magento project. If this is not found then `magedbm2` will fallback to the following options:
+### Importing sensitive data
 
-* `--db-host`
-* `--db-port`
-* `--db-user`
-* `--db-pass`
+    magedbm2 import <project> [<file>]
 
 ## Development
 
