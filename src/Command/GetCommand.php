@@ -37,6 +37,8 @@ class GetCommand extends BaseCommand
         $this->storage = $storage;
         $this->filesystem = $filesystem;
 
+        $storage->setPurpose(StorageInterface::PURPOSE_STRIPPED_DATABASE);
+
         $this->ensureServiceConfigurationValidated('storage', $this->storage);
     }
 

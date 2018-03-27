@@ -30,6 +30,11 @@ class S3 implements StorageInterface
         "version" => "latest",
     ];
 
+    /**
+     * @var string
+     */
+    private $purpose;
+
     public function __construct(Application $app, Application\ConfigInterface $config = null, S3Client $client = null)
     {
         $this->app = $app;
@@ -47,7 +52,7 @@ class S3 implements StorageInterface
      */
     public function listProjects()
     {
-        $bucket = $this->getConfig()->get("bucket");
+        $bucket = $this->getBucket();
 
         try {
             $objects = $this->getClient()->getIterator("ListObjects", [
@@ -72,7 +77,7 @@ class S3 implements StorageInterface
      */
     public function listFiles($project)
     {
-        $bucket = $this->getConfig()->get("bucket");
+        $bucket = $this->getBucket();
         $prefix = $this->getFileKey($project, "");
 
         try {
@@ -124,7 +129,7 @@ class S3 implements StorageInterface
     public function upload($project, $file)
     {
         $key = $this->getFileKey($project, basename($file));
-        $bucket = $this->getConfig()->get("bucket");
+        $bucket = $this->getBucket();
 
         try {
             $result = $this->getClient()->putObject([
@@ -145,7 +150,7 @@ class S3 implements StorageInterface
     public function download($project, $file)
     {
         $key = $this->getFileKey($project, $file);
-        $bucket = $this->getConfig()->get("bucket");
+        $bucket = $this->getBucket();
         $local_file = implode(DIRECTORY_SEPARATOR, [
             $this->getConfig()->getTmpDir(),
             $file
@@ -170,7 +175,7 @@ class S3 implements StorageInterface
     public function delete($project, $file)
     {
         $key = $this->getFileKey($project, $file);
-        $bucket = $this->getConfig()->get("bucket");
+        $bucket = $this->getBucket();
 
         try {
             $this->getClient()->deleteObject([
@@ -187,7 +192,7 @@ class S3 implements StorageInterface
      */
     public function clean($project, $keep = 5)
     {
-        $bucket = $this->getConfig()->get("bucket");
+        $bucket = $this->getBucket();
         $files = $this->listFiles($project);
 
         // Sort files by last_modified ascending
@@ -317,8 +322,15 @@ class S3 implements StorageInterface
         $definition->addOption(new InputOption(
             "bucket",
             null,
-            InputOption::VALUE_REQUIRED,
-            "S3 bucket"
+            InputOption::VALUE_OPTIONAL,
+            "S3 bucket for stripped databases"
+        ));
+
+        $definition->addOption(new InputOption(
+            "data-bucket",
+            null,
+            InputOption::VALUE_OPTIONAL,
+            "S3 bucket for anonymised data exports"
         ));
     }
 
@@ -327,8 +339,12 @@ class S3 implements StorageInterface
      */
     public function validateConfiguration(): bool
     {
-        if (!$this->getConfig()->get('bucket')) {
+        if ($this->purpose === StorageInterface::PURPOSE_STRIPPED_DATABASE && !$this->getConfig()->get('bucket')) {
             throw new ConfigurationException('A bucket needs to be defined');
+        }
+
+        if ($this->purpose === StorageInterface::PURPOSE_ANONYMISED_DATA && !$this->getConfig()->get('data-bucket')) {
+            throw new ConfigurationException('A data bucket needs to be defined');
         }
 
         try {
@@ -340,5 +356,28 @@ class S3 implements StorageInterface
         }
 
         return true;
+    }
+
+    /**
+     * @return mixed
+     */
+    private function getBucket()
+    {
+        if ($this->purpose === StorageInterface::PURPOSE_ANONYMISED_DATA) {
+            return $this->getConfig()->get('data-bucket');
+        }
+
+        return $this->getConfig()->get('bucket');
+    }
+
+    /**
+     * Define the purpose of this instantiation.
+     *
+     * @param $purpose
+     * @return mixed
+     */
+    public function setPurpose($purpose)
+    {
+        $this->purpose = $purpose;
     }
 }

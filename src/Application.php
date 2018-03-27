@@ -225,7 +225,9 @@ class Application extends \Symfony\Component\Console\Application
         ));
 
         $this->add(new Command\ExportCommand(
-            $this->getConfig()
+            $this->getConfig(),
+            $this->getService("storage"),
+            $this->getService("filesystem")
         ));
 
         $this->add(new Command\ImportCommand(

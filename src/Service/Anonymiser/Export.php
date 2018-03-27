@@ -100,8 +100,6 @@ class Export implements LoggerAwareInterface
 
         $openTableTag = false;
 
-        $this->getLogger()->info("Starting stream");
-
         while ($xml->read()) {
             if ($xml->nodeType === XMLReader::ELEMENT && $xml->name === 'table_data') {
                 $xml->moveToAttribute('name');
@@ -122,7 +120,7 @@ class Export implements LoggerAwareInterface
                 }
 
                 if (!$this->isFlatTable($tableName) && !$this->isEavTable($tableName)) {
-                    $this->getLogger()->info("Skipping $tableName as we're not configured to read it");
+                    $this->getLogger()->warning("Skipping $tableName as we're not configured to read it");
                     continue;
                 }
 
@@ -132,7 +130,7 @@ class Export implements LoggerAwareInterface
 
                 $openTableTag = true;
 
-                $this->getLogger()->info("Processing $tableName");
+                $this->getLogger()->debug("Processing $tableName");
 
                 $this->openTag('table', ['name' => $tableName], 1);
             }

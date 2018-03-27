@@ -56,6 +56,8 @@ class PutCommand extends BaseCommand
         $this->tableExpander = $tableGroupExpander ?? new TableGroupExpander();
         $this->config = $config;
 
+        $storage->setPurpose(StorageInterface::PURPOSE_STRIPPED_DATABASE);
+
         parent::__construct();
 
         $this->ensureServiceConfigurationValidated('database', $this->database);

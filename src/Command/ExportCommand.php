@@ -4,6 +4,8 @@ namespace Meanbee\Magedbm2\Command;
 
 use Meanbee\Magedbm2\Application\ConfigInterface;
 use Meanbee\Magedbm2\Service\Anonymiser\Export;
+use Meanbee\Magedbm2\Service\FilesystemInterface;
+use Meanbee\Magedbm2\Service\StorageInterface;
 use Meanbee\Magedbm2\Shell\Command\Gzip;
 use Meanbee\Magedbm2\Shell\Command\Mysqldump;
 use Symfony\Component\Console\Input\InputArgument;
@@ -14,8 +16,6 @@ use Symfony\Component\Console\Output\OutputInterface;
 class ExportCommand extends BaseCommand
 {
     const NAME            = 'export';
-    const ARG_OUTPUT_FILE = 'output-file';
-    const OPT_NO_COMPRESS = 'no-compress';
 
     /**
      * @var ConfigInterface
@@ -28,14 +28,30 @@ class ExportCommand extends BaseCommand
     private $anonymiser;
 
     /**
+     * @var StorageInterface
+     */
+    private $storage;
+
+    /**
+     * @var FilesystemInterface
+     */
+    private $filesystem;
+
+    /**
      * @param ConfigInterface $config
      * @throws \Symfony\Component\Console\Exception\LogicException
      */
-    public function __construct(ConfigInterface $config)
+    public function __construct(ConfigInterface $config, StorageInterface $storage, FilesystemInterface $filesystem)
     {
         parent::__construct(self::NAME);
         $this->config = $config;
         $this->anonymiser = new Export();
+        $this->storage = $storage;
+        $this->filesystem = $filesystem;
+
+        $storage->setPurpose(StorageInterface::PURPOSE_ANONYMISED_DATA);
+
+        $this->ensureServiceConfigurationValidated('storage', $this->storage);
     }
 
     /**
@@ -52,28 +68,29 @@ class ExportCommand extends BaseCommand
 
         $this->anonymiser->setLogger($this->getLogger());
 
+        $project = $this->input->getArgument('project');
         $tablesToExport = $this->configureAnonymiser();
 
-        $outputFileName = $this->input->getArgument(self::ARG_OUTPUT_FILE);
+        $outputFileName = $project . '-' . date('Y-m-d_His') . '.xml.gz';
+        $outputFilePath = $this->config->getTmpDir() . DIRECTORY_SEPARATOR . $outputFileName;
         $temporaryFileName = $this->generateTemporaryFile();
 
+        $this->getLogger()->info('Generating initial XML database dump');
         $exportFile = $this->generateDatabaseExport($tablesToExport);
 
+        $this->getLogger()->info('Anonymising file');
         $this->anonymiser->processFile($exportFile, $temporaryFileName);
+        $this->filesystem->delete($exportFile);
 
-        unlink($exportFile);
+        $this->getLogger()->info('Compressing file');
+        $this->compressFile($temporaryFileName, $outputFilePath);
+        $this->filesystem->delete($temporaryFileName);
 
-        $this->getLogger()->info('Anonymised dump at ' . $temporaryFileName);
+        $this->getLogger()->info('Uploading file');
+        $this->storage->upload($project, $outputFilePath);
+        $this->filesystem->delete($outputFilePath);
 
-        if ($this->shouldCompress()) {
-            $this->compressFile($temporaryFileName, $outputFileName);
-
-            unlink($temporaryFileName);
-        } else {
-            rename($temporaryFileName, $outputFileName);
-        }
-
-        $this->output->writeln("Exported to $outputFileName");
+        $this->output->writeln('Uploaded ' . $outputFileName);
 
         return static::RETURN_CODE_NO_ERROR;
     }
@@ -84,8 +101,11 @@ class ExportCommand extends BaseCommand
             ->setName(self::NAME)
             ->setDescription('Create an anonymised data export of sensitive tables');
 
-        $this->addArgument(self::ARG_OUTPUT_FILE, InputArgument::REQUIRED, 'Location to output the anonymised export.');
-        $this->addOption(self::OPT_NO_COMPRESS, 'Z', InputOption::VALUE_NONE, 'Disable gzipping of export file.');
+        $this->addArgument(
+            "project",
+            InputArgument::REQUIRED,
+            "Project identifier."
+        );
     }
 
     /**
@@ -176,6 +196,7 @@ class ExportCommand extends BaseCommand
         if (!is_readable($exportFile)) {
             throw new \RuntimeException('Created dump file was not readable');
         }
+
         return $exportFile;
     }
 
