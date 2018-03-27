@@ -18,8 +18,7 @@ class Eav
             return null;
         }
 
-        list($entity, $valueTable) = self::getEavParts($table);
-
+        $entity = self::getEavParts($table)[0];
         $entity = str_replace('_entity', '', $entity);
 
         return $entity;
@@ -33,7 +32,7 @@ class Eav
      */
     public static function isValueTable($table)
     {
-        list($entity, $valueTable) = self::getEavParts($table);
+        $valueTable = self::getEavParts($table)[1];
 
         return in_array($valueTable, self::VALUE_TYPES, true);
     }

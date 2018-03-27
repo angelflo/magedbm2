@@ -101,54 +101,58 @@ class Export implements LoggerAwareInterface
         $openTableTag = false;
 
         while ($xml->read()) {
-            if ($xml->nodeType === XMLReader::ELEMENT && $xml->name === 'table_data') {
-                $xml->moveToAttribute('name');
-                $tableName = $xml->value;
+            $isOpeningTag = $xml->nodeType === XMLReader::ELEMENT;
 
-                if ($tableName === 'eav_entity_type') {
-                    $this->extractEntityTypes(new \SimpleXMLElement($xml->readOuterXml()));
+            if ($isOpeningTag) {
+                $tagName = $xml->name;
+
+                if ($tagName === 'table_data') {
+                    $xml->moveToAttribute('name');
+                    $tableName = $xml->value;
+
+                    if ($tableName === 'eav_entity_type') {
+                        $this->extractEntityTypes(new \SimpleXMLElement($xml->readOuterXml()));
+                        $xml->next();
+                        $tableName = null;
+                        continue;
+                    }
+
+                    if ($tableName === 'eav_attribute') {
+                        $this->extractAttributes(new \SimpleXMLElement($xml->readOuterXml()));
+                        $xml->next();
+                        $tableName = null;
+                        continue;
+                    }
+
+                    if (!$this->isFlatTable($tableName) && !$this->isEavTable($tableName)) {
+                        $this->getLogger()->warning("Skipping $tableName as we're not configured to read it");
+                        continue;
+                    }
+
+                    if ($openTableTag) {
+                        $this->closeTag('table', 1);
+                    }
+
+                    $openTableTag = true;
+
+                    $this->getLogger()->debug("Processing $tableName");
+
+                    $this->openTag('table', ['name' => $tableName], 1);
+                } elseif ($tableName && $tagName === 'row') {
+                    $rowData = new \SimpleXMLElement($xml->readOuterXml());
+                    $row = new Row($rowData);
+                    $row->table = $tableName;
+
                     $xml->next();
-                    $tableName = null;
+
+                    if ($this->isFlatTable($tableName)) {
+                        $this->processFlatRow($row);
+                    } elseif ($this->isEavTable($tableName)) {
+                        $this->processEavTable($row);
+                    }
+
                     continue;
                 }
-
-                if ($tableName === 'eav_attribute') {
-                    $this->extractAttributes(new \SimpleXMLElement($xml->readOuterXml()));
-                    $xml->next();
-                    $tableName = null;
-                    continue;
-                }
-
-                if (!$this->isFlatTable($tableName) && !$this->isEavTable($tableName)) {
-                    $this->getLogger()->warning("Skipping $tableName as we're not configured to read it");
-                    continue;
-                }
-
-                if ($openTableTag) {
-                    $this->closeTag('table', 1);
-                }
-
-                $openTableTag = true;
-
-                $this->getLogger()->debug("Processing $tableName");
-
-                $this->openTag('table', ['name' => $tableName], 1);
-            }
-
-            if ($tableName && $xml->nodeType === XMLReader::ELEMENT && $xml->name === 'row') {
-                $rowData = new \SimpleXMLElement($xml->readOuterXml());
-                $row = new Row($rowData);
-                $row->table = $tableName;
-
-                $xml->next();
-
-                if ($this->isFlatTable($tableName)) {
-                    $this->processFlatRow($row);
-                } elseif ($this->isEavTable($tableName)) {
-                    $this->processEavTable($row);
-                }
-
-                continue;
             }
         }
 
@@ -284,6 +288,8 @@ class Export implements LoggerAwareInterface
      * @param array $attributes
      * @param int $depth
      * @param bool $newline
+     *
+     * @SuppressWarnings(PHPMD.BooleanArgumentFlag)
      */
     private function openTag($name, $attributes = [], $depth = 0, $newline = true)
     {
