@@ -204,7 +204,7 @@ class ExportCommand extends BaseCommand
      * @param $inputFile
      * @param $outputFile
      */
-    protected function compressFile($inputFile, $outputFile): void
+    protected function compressFile($inputFile, $outputFile)
     {
         $gzip = (new Gzip())
             ->argument('-9')
