@@ -31,6 +31,6 @@ class Pipe implements CommandInterface
      */
     public function toProcess(): Process
     {
-        return new Process($this->toString());
+        return new Process($this->toString(), null, null, null, 60 * 60 * 12);
     }
 }
