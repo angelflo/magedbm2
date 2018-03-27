@@ -78,7 +78,7 @@ class Application extends \Symfony\Component\Console\Application
     }
 
     /**
-     * Get a service instance.
+     * Get a service singleton instance.
      *
      * @param string $name
      *
@@ -91,6 +91,29 @@ class Application extends \Symfony\Component\Console\Application
         }
 
         return $this->services[$name];
+    }
+
+    /**
+     * @param $name
+     * @return mixed
+     */
+    public function createService($name, OutputInterface $output = null)
+    {
+        $serviceMap = [
+            'storage' => $this->getStorageImplementation(),
+            'database' => $this->getDatabaseImplementation(),
+            'filesystem' => $this->getFileSystemImplementation(),
+        ];
+
+        if (array_key_exists($name, $serviceMap)) {
+            $instance = $serviceMap[$name];
+        }
+
+        if ($output && $instance instanceof LoggerAwareInterface) {
+            $instance->setLogger(new ConsoleLogger($output));
+        }
+
+        return $instance;
     }
 
     /**
@@ -115,7 +138,7 @@ class Application extends \Symfony\Component\Console\Application
     {
         $this->initConfig($input, $output);
         $this->initServices($output);
-        $this->initCommands();
+        $this->initCommands($output);
     }
 
     /**
@@ -141,9 +164,9 @@ class Application extends \Symfony\Component\Console\Application
     protected function initServices(OutputInterface $output)
     {
         $this->services = [
-            'storage' => $this->getStorageImplementation(),
-            'database' => $this->getDatabaseImplementation(),
-            'filesystem' => $this->getFileSystemImplementation(),
+            'storage' => $this->createService('storage', $output),
+            'database' => $this->createService('database', $output),
+            'filesystem' => $this->createService('filesystem', $output),
         ];
 
         foreach ($this->services as $service) {
@@ -193,9 +216,10 @@ class Application extends \Symfony\Component\Console\Application
     /**
      * Initialise the available commands.
      *
+     * @param OutputInterface $output
      * @return void
      */
-    protected function initCommands()
+    protected function initCommands(OutputInterface $output)
     {
         $this->add(new Command\ConfigureCommand(
             $this->getConfig(),
@@ -205,18 +229,19 @@ class Application extends \Symfony\Component\Console\Application
 
         $this->add(new Command\GetCommand(
             $this->getService("database"),
-            $this->getService("storage"),
+            $this->createService("storage", $output),
             $this->getService("filesystem")
         ));
 
         $this->add(new Command\LsCommand(
-            $this->getService("storage")
+            $this->createService("storage", $output),
+            $this->createService("storage", $output)
         ));
 
         $this->add(new Command\PutCommand(
             $this->getConfig(),
             $this->getService("database"),
-            $this->getService("storage"),
+            $this->createService("storage", $output),
             $this->getService("filesystem")
         ));
 
@@ -226,13 +251,13 @@ class Application extends \Symfony\Component\Console\Application
 
         $this->add(new Command\ExportCommand(
             $this->getConfig(),
-            $this->getService("storage"),
+            $this->createService("storage", $output),
             $this->getService("filesystem")
         ));
 
         $this->add(new Command\ImportCommand(
             $this->getConfig(),
-            $this->getService("storage"),
+            $this->createService("storage", $output),
             $this->getService("filesystem")
         ));
     }
