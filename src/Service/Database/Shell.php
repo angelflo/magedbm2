@@ -244,18 +244,7 @@ class Shell implements DatabaseInterface
      */
     private function getPdo()
     {
-        $creds = $this->config->getDatabaseCredentials();
-
-        return new \PDO(
-            sprintf(
-                'mysql:dbname=%s;host=%s;port=%s',
-                $creds->getName(),
-                $creds->getHost(),
-                $creds->getPort()
-            ),
-            $creds->getUsername(),
-            $creds->getPassword()
-        );
+        return $this->config->getDatabaseCredentials()->createPDO();
     }
 
     /**
