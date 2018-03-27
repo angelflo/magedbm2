@@ -231,7 +231,9 @@ class Application extends \Symfony\Component\Console\Application
         ));
 
         $this->add(new Command\ImportCommand(
-            $this->getConfig()
+            $this->getConfig(),
+            $this->getService("storage"),
+            $this->getService("filesystem")
         ));
     }
 }

@@ -4,8 +4,12 @@ namespace Meanbee\Magedbm2\Command;
 
 use Meanbee\Magedbm2\Application\ConfigInterface;
 use Meanbee\Magedbm2\Exception\ConfigurationException;
+use Meanbee\Magedbm2\Service\FilesystemInterface;
+use Meanbee\Magedbm2\Service\StorageInterface;
+use Meanbee\Magedbm2\Shell\Command\Gunzip;
 use PDO;
 use Symfony\Component\Console\Helper\ProgressBar;
+use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -15,6 +19,8 @@ class ImportCommand extends BaseCommand
 {
     const NAME            = 'import';
     const OPT_NO_PROGRESS = 'no-progress';
+    const ARG_PROJECT     = "project";
+    const ARG_FILE        = "file";
 
     /**
      * @var ConfigInterface
@@ -32,13 +38,29 @@ class ImportCommand extends BaseCommand
     private $statementCache = [];
 
     /**
+     * @var StorageInterface
+     */
+    private $storage;
+
+    /**
+     * @var FilesystemInterface
+     */
+    private $filesystem;
+
+    /**
      * @param ConfigInterface $config
      * @throws \Symfony\Component\Console\Exception\LogicException
      */
-    public function __construct(ConfigInterface $config)
+    public function __construct(ConfigInterface $config, StorageInterface $storage, FilesystemInterface $filesystem)
     {
         parent::__construct(self::NAME);
         $this->config = $config;
+        $this->storage = $storage;
+        $this->filesystem = $filesystem;
+
+        $storage->setPurpose(StorageInterface::PURPOSE_ANONYMISED_DATA);
+
+        $this->ensureServiceConfigurationValidated('storage', $this->storage);
     }
 
     /**
@@ -70,23 +92,38 @@ class ImportCommand extends BaseCommand
             InputOption::VALUE_NONE,
             'Hide the progress bar.'
         );
+
+        $this->addArgument(
+            self::ARG_PROJECT,
+            InputArgument::REQUIRED,
+            "Project identifier."
+        );
+
+        $this->addArgument(
+            self::ARG_FILE,
+            InputArgument::OPTIONAL,
+            "Backup file to import. If not specified, imports the latest available file."
+        );
     }
 
     /**
      * @throws ConfigurationException
+     * @throws \Exception
      */
     private function readXml()
     {
         $this->checkDatabaseCredentials();
 
-        $file = 'test.xml';
+        $file = $this->downloadFileToImport();
+        $decompressedFile = $this->decompressFile($file);
+        $this->filesystem->delete($file);
 
         if ($this->showProgressBar()) {
-            $progressBar = new ProgressBar($this->output, $this->getRowCount($file));
+            $progressBar = new ProgressBar($this->output, $this->getRowCount($decompressedFile));
         }
 
         $xml = new XMLReader();
-        $xml->open($file);
+        $xml->open($decompressedFile);
 
         $table = null;
         $row = [];
@@ -244,5 +281,69 @@ class ImportCommand extends BaseCommand
     private function showProgressBar()
     {
         return !$this->input->getOption(self::OPT_NO_PROGRESS);
+    }
+
+    /**
+     * @return string
+     */
+    private function downloadFileToImport()
+    {
+        $project = $this->input->getArgument(self::ARG_PROJECT);
+        $userSpecifiedFile = $this->input->getArgument(self::ARG_FILE);
+
+        if (!$userSpecifiedFile) {
+            $file = $this->storage->getLatestFile($project);
+            $this->getLogger()->info('File to download identified as ' . $file);
+        } else {
+            $file = $userSpecifiedFile;
+        }
+
+        $this->getLogger()->info('Starting file download');
+        $downloadLocation = $this->storage->download($project, $file);
+        $this->getLogger()->info('File downloaded to ' . $downloadLocation);
+
+        return $downloadLocation;
+    }
+
+    /**
+     * Generate a temporary file.
+     *
+     * @return string
+     * @throws \Exception
+     */
+    private function generateTemporaryFile()
+    {
+        $file = tempnam($this->config->getTmpDir(), 'export');
+
+        if ($file === false) {
+            throw new \RuntimeException('Unable to create temporary file');
+        }
+
+        return $file;
+    }
+
+    /**
+     * @param $file
+     * @return string
+     * @throws \Exception
+     */
+    private function decompressFile($file)
+    {
+        $uncompressedFile = $this->generateTemporaryFile();
+
+        $this->getLogger()->info("Decompressing $file to $uncompressedFile");
+
+        $uncompress = (new Gunzip())
+            ->argument('-c')
+            ->argument($file)
+            ->output($uncompressedFile);
+
+        $this->getLogger()->debug($uncompress->toString());
+
+        $uncompressProcess = $uncompress->toProcess();
+        $uncompressProcess->start();
+        $uncompressProcess->wait();
+
+        return $uncompressedFile;
     }
 }
