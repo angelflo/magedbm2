@@ -149,14 +149,6 @@ class ExportCommand extends BaseCommand
     }
 
     /**
-     * @return bool
-     */
-    private function shouldCompress()
-    {
-        return ((bool) $this->input->getOption(self::OPT_NO_COMPRESS)) === false;
-    }
-
-    /**
      * @param $tables
      * @return string
      * @throws \Exception
